@@ -1,0 +1,2951 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+config/database.js
+controllers/actionController.js
+controllers/dashboardController.js
+controllers/locationController.js
+controllers/observationController.js
+controllers/observerController.js
+controllers/speciesController.js
+models/actionModel.js
+models/locationModel.js
+models/observationModel.js
+models/observerModel.js
+models/speciesModel.js
+package.json
+public/css/style.css
+public/js/action.js
+public/js/location.js
+public/js/main.js
+public/js/observation.js
+public/js/observers.js
+public/js/species.js
+routes/actionRoutes.js
+routes/dashboardRoutes.js
+routes/locationRoutes.js
+routes/observationRoutes.js
+routes/observerRoutes.js
+routes/speciesRoutes.js
+server.js
+views/action.html
+views/index.html
+views/location.html
+views/observation.html
+views/observers.html
+views/species.html
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".gitignore">
+node_modules/
+.env
+*.log
+.DS_Store
+</file>
+
+<file path="config/database.js">
+const mysql = require('mysql2');
+require('dotenv').config();
+
+// Create connection pool (better than single connection)
+const pool = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
+// Convert to promises for async/await usage
+const promisePool = pool.promise();
+
+// Test connection
+pool.getConnection((err, connection) => {
+    if (err) {
+        console.error('❌ Error connecting to database:', err.message);
+    } else {
+        console.log('✅ Connected to MySQL database');
+        connection.release();
+    }
+});
+
+module.exports = promisePool;
+</file>
+
+<file path="controllers/actionController.js">
+const ActionModel = require('../models/actionModel');
+
+// Get all conservation actions
+exports.getAllActions = async (req, res) => {
+    try {
+        const actions = await ActionModel.getAll();
+        res.json({ success: true, data: actions });
+    } catch (error) {
+        console.error('Error fetching actions:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get action by ID
+exports.getActionById = async (req, res) => {
+    try {
+        const action = await ActionModel.getById(req.params.id);
+        if (!action) {
+            return res.status(404).json({ success: false, error: 'Action not found' });
+        }
+        res.json({ success: true, data: action });
+    } catch (error) {
+        console.error('Error fetching action:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Check if action is active
+exports.checkActionActive = async (req, res) => {
+    try {
+        const { actionId, date } = req.query;
+        const isActive = await ActionModel.isActive(actionId, date);
+        res.json({ success: true, data: { isActive } });
+    } catch (error) {
+        console.error('Error checking action status:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Create new action
+exports.createAction = async (req, res) => {
+    try {
+        const result = await ActionModel.create(req.body);
+        res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error creating action:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Update action
+exports.updateAction = async (req, res) => {
+    try {
+        const result = await ActionModel.update(req.params.id, req.body);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Action not found' });
+        }
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error updating action:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Delete action
+exports.deleteAction = async (req, res) => {
+    try {
+        const result = await ActionModel.delete(req.params.id);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Action not found' });
+        }
+        res.json({ success: true, message: 'Action deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting action:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Apply action to location (calls stored procedure)
+exports.applyActionToLocation = async (req, res) => {
+    try {
+        const { actionId, locationId } = req.body;
+        const created = await ActionModel.applyToLocation(actionId, locationId);
+        res.json({ 
+            success: true, 
+            data: { created: created === 1 },
+            message: created === 1 ? 'Action applied to location' : 'Action already applied to this location'
+        });
+    } catch (error) {
+        console.error('Error applying action to location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="controllers/dashboardController.js">
+const SpeciesModel = require('../models/speciesModel');
+const ObservationModel = require('../models/observationModel');
+
+exports.getDashboardStats = async (req, res) => {
+    try {
+        const [speciesCount, observationCount, recentObservations, statusCounts] = await Promise.all([
+            SpeciesModel.getAll().then(species => species.length),
+            ObservationModel.getCount(),
+            ObservationModel.getRecent(5),
+            SpeciesModel.getCountByStatus()
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                speciesCount,
+                observationCount,
+                recentObservations,
+                statusCounts
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="controllers/locationController.js">
+const LocationModel = require('../models/locationModel');
+
+// Get all locations
+exports.getAllLocations = async (req, res) => {
+    try {
+        const locations = await LocationModel.getAll();
+        res.json({ success: true, data: locations });
+    } catch (error) {
+        console.error('Error fetching locations:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get location by ID
+exports.getLocationById = async (req, res) => {
+    try {
+        const location = await LocationModel.getById(req.params.id);
+        if (!location) {
+            return res.status(404).json({ success: false, error: 'Location not found' });
+        }
+        res.json({ success: true, data: location });
+    } catch (error) {
+        console.error('Error fetching location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Create new location
+exports.createLocation = async (req, res) => {
+    try {
+        const result = await LocationModel.create(req.body);
+        res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error creating location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Update location
+exports.updateLocation = async (req, res) => {
+    try {
+        const result = await LocationModel.update(req.params.id, req.body);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Location not found' });
+        }
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error updating location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Delete location
+exports.deleteLocation = async (req, res) => {
+    try {
+        const result = await LocationModel.delete(req.params.id);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Location not found' });
+        }
+        res.json({ success: true, message: 'Location deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="controllers/observationController.js">
+const ObservationModel = require('../models/observationModel');
+
+exports.getAllObservations = async (req, res) => {
+    try {
+        const observations = await ObservationModel.getAll();
+        res.json({ success: true, data: observations });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+exports.getRecentObservations = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const observations = await ObservationModel.getRecent(limit);
+        res.json({ success: true, data: observations });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+exports.logObservation = async (req, res) => {
+    try {
+        const result = await ObservationModel.logObservation(req.body);
+        res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+exports.getObservationCount = async (req, res) => {
+    try {
+        const count = await ObservationModel.getCount();
+        res.json({ success: true, data: { count } });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="controllers/observerController.js">
+const ObserverModel = require('../models/observerModel');
+
+// Get all observers
+exports.getAllObservers = async (req, res) => {
+    try {
+        const observers = await ObserverModel.getAll();
+        res.json({ success: true, data: observers });
+    } catch (error) {
+        console.error('Error fetching observers:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get observer by ID
+exports.getObserverById = async (req, res) => {
+    try {
+        const observer = await ObserverModel.getById(req.params.id);
+        if (!observer) {
+            return res.status(404).json({ success: false, error: 'Observer not found' });
+        }
+        res.json({ success: true, data: observer });
+    } catch (error) {
+        console.error('Error fetching observer:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get observer seniority level
+exports.getObserverSeniority = async (req, res) => {
+    try {
+        const level = parseInt(req.params.level);
+        const seniority = await ObserverModel.getSeniority(level);
+        res.json({ success: true, data: { seniority } });
+    } catch (error) {
+        console.error('Error fetching seniority:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get observation count for observer
+exports.getObservationCount = async (req, res) => {
+    try {
+        const count = await ObserverModel.getObservationCount(req.params.id);
+        res.json({ success: true, data: { count } });
+    } catch (error) {
+        console.error('Error fetching observation count:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Create new observer
+exports.createObserver = async (req, res) => {
+    try {
+        const result = await ObserverModel.create(req.body);
+        res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error creating observer:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Update observer
+exports.updateObserver = async (req, res) => {
+    try {
+        const result = await ObserverModel.update(req.params.id, req.body);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Observer not found' });
+        }
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error updating observer:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Delete observer
+exports.deleteObserver = async (req, res) => {
+    try {
+        const result = await ObserverModel.delete(req.params.id);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Observer not found' });
+        }
+        res.json({ success: true, message: 'Observer deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting observer:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="controllers/speciesController.js">
+const SpeciesModel = require('../models/speciesModel');
+
+// Get all species
+exports.getAllSpecies = async (req, res) => {
+    try {
+        const species = await SpeciesModel.getAll();
+        res.json({ success: true, data: species });
+    } catch (error) {
+        console.error('Error fetching species:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get species by ID
+exports.getSpeciesById = async (req, res) => {
+    try {
+        const species = await SpeciesModel.getById(req.params.id);
+        if (!species) {
+            return res.status(404).json({ success: false, error: 'Species not found' });
+        }
+        res.json({ success: true, data: species });
+    } catch (error) {
+        console.error('Error fetching species:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get species full name
+exports.getSpeciesFullName = async (req, res) => {
+    try {
+        const fullName = await SpeciesModel.getFullName(req.params.id);
+        res.json({ success: true, data: { fullName } });
+    } catch (error) {
+        console.error('Error fetching species full name:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get species threats
+exports.getSpeciesThreats = async (req, res) => {
+    try {
+        const threats = await SpeciesModel.getThreats(req.params.id);
+        res.json({ success: true, data: threats });
+    } catch (error) {
+        console.error('Error fetching threats:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get species actions
+exports.getSpeciesActions = async (req, res) => {
+    try {
+        const actions = await SpeciesModel.getActions(req.params.id);
+        res.json({ success: true, data: actions });
+    } catch (error) {
+        console.error('Error fetching actions:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Create new species
+exports.createSpecies = async (req, res) => {
+    try {
+        const result = await SpeciesModel.create(req.body);
+        res.status(201).json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error creating species:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Update species
+exports.updateSpecies = async (req, res) => {
+    try {
+        const result = await SpeciesModel.update(req.params.id, req.body);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error updating species:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Delete species
+exports.deleteSpecies = async (req, res) => {
+    try {
+        const result = await SpeciesModel.delete(req.params.id);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Error deleting species:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get species count by status
+exports.getCountByStatus = async (req, res) => {
+    try {
+        const data = await SpeciesModel.getCountByStatus();
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Error fetching count:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+</file>
+
+<file path="models/actionModel.js">
+const db = require('../config/database');
+
+class ActionModel {
+    static async getAll() {
+        const [rows] = await db.query('SELECT * FROM ConservationAction ORDER BY StartDate DESC');
+        return rows;
+    }
+
+    static async getById(id) {
+        const [rows] = await db.query('SELECT * FROM ConservationAction WHERE ActionId = ?', [id]);
+        return rows[0];
+    }
+
+    // Check if action is active using custom function
+    static async isActive(actionId, date) {
+        const [rows] = await db.query(
+            'SELECT fn_action_is_active(?, ?) as IsActive',
+            [actionId, date]
+        );
+        return rows[0]?.IsActive === 1;
+    }
+
+    static async create(action) {
+        const [result] = await db.query(
+            'INSERT INTO ConservationAction (ActionId, ActionType, StartDate, EndDate, ResponsibleOrg, Effectiveness) VALUES (?, ?, ?, ?, ?, ?)',
+            [action.actionId, action.actionType, action.startDate, action.endDate, action.responsibleOrg, action.effectiveness]
+        );
+        return result;
+    }
+
+    static async update(id, action) {
+        const [result] = await db.query(
+            'UPDATE ConservationAction SET ActionType = ?, StartDate = ?, EndDate = ?, ResponsibleOrg = ?, Effectiveness = ? WHERE ActionId = ?',
+            [action.actionType, action.startDate, action.endDate, action.responsibleOrg, action.effectiveness, id]
+        );
+        return result;
+    }
+
+    static async delete(id) {
+        const [result] = await db.query('DELETE FROM ConservationAction WHERE ActionId = ?', [id]);
+        return result;
+    }
+
+    // Apply action to location using stored procedure
+    static async applyToLocation(actionId, locationId) {
+        const [result] = await db.query(
+            'CALL sp_apply_action_to_location(?, ?, @created)',
+            [actionId, locationId]
+        );
+        const [output] = await db.query('SELECT @created as created');
+        return output[0].created;
+    }
+}
+
+module.exports = ActionModel;
+</file>
+
+<file path="models/locationModel.js">
+const db = require('../config/database');
+
+class LocationModel {
+    static async getAll() {
+        const [rows] = await db.query('SELECT * FROM Location ORDER BY Country, Region');
+        return rows;
+    }
+
+    static async getById(id) {
+        const [rows] = await db.query('SELECT * FROM Location WHERE LocationId = ?', [id]);
+        return rows[0];
+    }
+
+    static async create(location) {
+        const [result] = await db.query(
+            'INSERT INTO Location (LocationId, Country, Region, Latitude, Longitude, EcosystemType) VALUES (?, ?, ?, ?, ?, ?)',
+            [location.locationId, location.country, location.region, location.latitude, location.longitude, location.ecosystemType]
+        );
+        return result;
+    }
+
+    static async update(id, location) {
+        const [result] = await db.query(
+            'UPDATE Location SET Country = ?, Region = ?, Latitude = ?, Longitude = ?, EcosystemType = ? WHERE LocationId = ?',
+            [location.country, location.region, location.latitude, location.longitude, location.ecosystemType, id]
+        );
+        return result;
+    }
+
+    static async delete(id) {
+        const [result] = await db.query('DELETE FROM Location WHERE LocationId = ?', [id]);
+        return result;
+    }
+}
+
+module.exports = LocationModel;
+</file>
+
+<file path="models/observationModel.js">
+const db = require('../config/database');
+
+class ObservationModel {
+    // Get all observations with joined data
+    static async getAll() {
+        const [rows] = await db.query(`
+            SELECT 
+                o.*,
+                s.CommonName as SpeciesName,
+                l.Country, l.Region,
+                ob.Name as ObserverName
+            FROM Observation o
+            INNER JOIN Species s ON o.SpeciesId = s.SpeciesId
+            INNER JOIN Location l ON o.LocationId = l.LocationId
+            INNER JOIN Observer ob ON o.ObserverId = ob.ObserverId
+            ORDER BY o.DateTime DESC
+        `);
+        return rows;
+    }
+
+    // Get recent observations (for dashboard)
+    static async getRecent(limit = 10) {
+        const [rows] = await db.query(`
+            SELECT 
+                o.*,
+                s.CommonName as SpeciesName,
+                l.Country, l.Region,
+                ob.Name as ObserverName
+            FROM Observation o
+            INNER JOIN Species s ON o.SpeciesId = s.SpeciesId
+            INNER JOIN Location l ON o.LocationId = l.LocationId
+            INNER JOIN Observer ob ON o.ObserverId = ob.ObserverId
+            ORDER BY o.DateTime DESC
+            LIMIT ?
+        `, [limit]);
+        return rows;
+    }
+
+    // Get observations by species
+    static async getBySpecies(speciesId) {
+        const [rows] = await db.query(`
+            SELECT o.*, l.Country, l.Region, ob.Name as ObserverName
+            FROM Observation o
+            INNER JOIN Location l ON o.LocationId = l.LocationId
+            INNER JOIN Observer ob ON o.ObserverId = ob.ObserverId
+            WHERE o.SpeciesId = ?
+            ORDER BY o.DateTime DESC
+        `, [speciesId]);
+        return rows;
+    }
+
+    // Call stored procedure to log observation
+    static async logObservation(observation) {
+        const [result] = await db.query(
+            'CALL sp_log_observation(?, ?, ?, ?, ?, ?, ?, ?)',
+            [
+                observation.observerId,
+                observation.observationNo,
+                observation.speciesId,
+                observation.locationId,
+                observation.dateTime,
+                observation.count,
+                observation.behavior,
+                observation.evidence
+            ]
+        );
+        return result;
+    }
+
+    // Get total observation count
+    static async getCount() {
+        const [rows] = await db.query('SELECT COUNT(*) as count FROM Observation');
+        return rows[0].count;
+    }
+}
+
+module.exports = ObservationModel;
+</file>
+
+<file path="models/observerModel.js">
+const db = require('../config/database');
+
+class ObserverModel {
+    static async getAll() {
+        const [rows] = await db.query('SELECT * FROM Observer ORDER BY Name');
+        return rows;
+    }
+
+    static async getById(id) {
+        const [rows] = await db.query('SELECT * FROM Observer WHERE ObserverId = ?', [id]);
+        return rows[0];
+    }
+
+    // Get seniority using custom function
+    static async getSeniority(level) {
+        const [rows] = await db.query('SELECT fn_observer_seniority(?) as Seniority', [level]);
+        return rows[0]?.Seniority;
+    }
+
+    static async create(observer) {
+        const [result] = await db.query(
+            'INSERT INTO Observer (ObserverId, Name, Contact, Affiliation, ExperienceLevel) VALUES (?, ?, ?, ?, ?)',
+            [observer.observerId, observer.name, observer.contact, observer.affiliation, observer.experienceLevel]
+        );
+        return result;
+    }
+
+    static async update(id, observer) {
+        const [result] = await db.query(
+            'UPDATE Observer SET Name = ?, Contact = ?, Affiliation = ?, ExperienceLevel = ? WHERE ObserverId = ?',
+            [observer.name, observer.contact, observer.affiliation, observer.experienceLevel, id]
+        );
+        return result;
+    }
+
+    static async delete(id) {
+        const [result] = await db.query('DELETE FROM Observer WHERE ObserverId = ?', [id]);
+        return result;
+    }
+
+    // Get observation count per observer
+    static async getObservationCount(observerId) {
+        const [rows] = await db.query(
+            'SELECT COUNT(*) as count FROM Observation WHERE ObserverId = ?',
+            [observerId]
+        );
+        return rows[0].count;
+    }
+}
+
+module.exports = ObserverModel;
+</file>
+
+<file path="models/speciesModel.js">
+const db = require('../config/database');
+
+class SpeciesModel {
+    // Get all species
+    static async getAll() {
+        const [rows] = await db.query(`
+            SELECT s.*, GROUP_CONCAT(sd.Diet) as Diets
+            FROM Species s
+            LEFT JOIN SpeciesDiet sd ON s.SpeciesId = sd.SpeciesId
+            GROUP BY s.SpeciesId
+            ORDER BY s.CommonName
+        `);
+        return rows;
+    }
+
+    // Get species by ID
+    static async getById(id) {
+        const [rows] = await db.query(`
+            SELECT s.*, GROUP_CONCAT(sd.Diet) as Diets
+            FROM Species s
+            LEFT JOIN SpeciesDiet sd ON s.SpeciesId = sd.SpeciesId
+            WHERE s.SpeciesId = ?
+            GROUP BY s.SpeciesId
+        `, [id]);
+        return rows[0];
+    }
+
+    // Get species with full name using your custom function
+    static async getFullName(id) {
+        const [rows] = await db.query(
+            'SELECT fn_species_full_name(?) as FullName',
+            [id]
+        );
+        return rows[0]?.FullName;
+    }
+
+    // Get species threats
+    static async getThreats(speciesId) {
+        const [rows] = await db.query(`
+            SELECT t.* FROM Threat t
+            INNER JOIN Faces f ON t.ThreatId = f.ThreatId
+            WHERE f.SpeciesId = ?
+        `, [speciesId]);
+        return rows;
+    }
+
+    // Get species conservation actions
+    static async getActions(speciesId) {
+        const [rows] = await db.query(`
+            SELECT ca.* FROM ConservationAction ca
+            INNER JOIN Targets t ON ca.ActionId = t.ActionId
+            WHERE t.SpeciesId = ?
+        `, [speciesId]);
+        return rows;
+    }
+
+    // Create new species
+    static async create(species) {
+        const [result] = await db.query(
+            'INSERT INTO Species (SpeciesId, ScientificName, CommonName, ConservationStatus, HabitatType) VALUES (?, ?, ?, ?, ?)',
+            [species.speciesId, species.scientificName, species.commonName, species.conservationStatus, species.habitatType]
+        );
+        return result;
+    }
+
+    // Update species
+    static async update(id, species) {
+        const [result] = await db.query(
+            'UPDATE Species SET ScientificName = ?, CommonName = ?, ConservationStatus = ?, HabitatType = ? WHERE SpeciesId = ?',
+            [species.scientificName, species.commonName, species.conservationStatus, species.habitatType, id]
+        );
+        return result;
+    }
+
+    // Delete species
+    static async delete(id) {
+        const [result] = await db.query('DELETE FROM Species WHERE SpeciesId = ?', [id]);
+        return result;
+    }
+
+    // Get species count by conservation status
+    static async getCountByStatus() {
+        const [rows] = await db.query(`
+            SELECT ConservationStatus, COUNT(*) as Count
+            FROM Species
+            GROUP BY ConservationStatus
+        `);
+        return rows;
+    }
+}
+
+module.exports = SpeciesModel;
+</file>
+
+<file path="package.json">
+{
+  "name": "biodiversity-app",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "mysql2": "^3.15.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
+</file>
+
+<file path="public/css/style.css">
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background-color: #f5f7fa;
+}
+
+/* Navigation */
+.navbar {
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.nav-brand h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+.nav-menu {
+    display: flex;
+    list-style: none;
+    gap: 0.5rem;
+}
+
+.nav-menu a {
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.nav-menu a:hover {
+    background-color: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+
+.nav-menu a.active {
+    background-color: rgba(255,255,255,0.2);
+}
+
+/* Main Content */
+.main-content {
+    padding: 2rem;
+}
+
+.main-content h2 {
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+    font-size: 2rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    padding: 1.8rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    transition: all 0.3s;
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.stat-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+}
+
+.stat-icon {
+    font-size: 3.5rem;
+    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.1));
+}
+
+.stat-info h3 {
+    font-size: 2.5rem;
+    color: #27ae60;
+    font-weight: 700;
+}
+
+.stat-info p {
+    color: #7f8c8d;
+    font-size: 0.95rem;
+    margin-top: 0.3rem;
+}
+
+/* Card */
+.card {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+    margin-bottom: 2rem;
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.card h3 {
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+/* Chart Container */
+.chart-container {
+    min-height: 200px;
+}
+
+/* Table */
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table thead {
+    background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+    color: white;
+}
+
+table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+table td {
+    padding: 1rem;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+table tbody tr {
+    transition: background-color 0.2s;
+}
+
+table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.3s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+    color: white;
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(39, 174, 96, 0.4);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(231, 76, 60, 0.4);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+    color: white;
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(127, 140, 141, 0.4);
+}
+
+/* Action buttons in tables */
+table td button {
+    margin-right: 5px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-CR { background-color: #e74c3c; color: white; }
+.status-EN { background-color: #e67e22; color: white; }
+.status-VU { background-color: #f39c12; color: white; }
+.status-NT { background-color: #f1c40f; color: #333; }
+.status-LC { background-color: #27ae60; color: white; }
+.status-DD { background-color: #95a5a6; color: white; }
+.status-EX { background-color: #2c3e50; color: white; }
+.status-EW { background-color: #34495e; color: white; }
+.status-NE { background-color: #7f8c8d; color: white; }
+
+/* Loading */
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+/* Modal improvements */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 3% auto;
+    padding: 2rem;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    animation: slideDown 0.3s;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 32px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 20px;
+}
+
+.close:hover,
+.close:focus {
+    color: #e74c3c;
+}
+
+/* Form styles */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-group button {
+    margin-right: 10px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .navbar {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .nav-menu {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .main-content {
+        padding: 1rem;
+    }
+    
+    table {
+        font-size: 0.85rem;
+    }
+    
+    table th,
+    table td {
+        padding: 0.6rem;
+    }
+
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+        padding: 1.5rem;
+    }
+
+    table td button {
+        display: block;
+        width: 100%;
+        margin-bottom: 5px;
+    }
+}
+</file>
+
+<file path="public/js/action.js">
+const API_ACT = 'http://localhost:3000/api';
+
+async function fetchAPI(path) {
+    const res = await fetch(`${API_ACT}${path}`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Request failed');
+    return json.data;
+}
+
+async function sendAPI(path, method, body) {
+    const res = await fetch(`${API_ACT}${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Request failed');
+    return json.data;
+}
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Conservation Action';
+    document.getElementById('actionId').disabled = false;
+    document.getElementById('actionForm').reset();
+    document.getElementById('actionModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('actionModal').style.display = 'none';
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('en-IN');
+}
+
+function getStatusBadge(startDate, endDate) {
+    const now = new Date();
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : null;
+    
+    if (start > now) {
+        return '<span class="status-badge status-NT">Planned</span>';
+    } else if (!end || end >= now) {
+        return '<span class="status-badge status-LC">Active</span>';
+    } else {
+        return '<span class="status-badge status-DD">Completed</span>';
+    }
+}
+
+async function loadActions() {
+    const tbody = document.querySelector('#actionsTable tbody');
+    tbody.innerHTML = `<tr><td colspan="8" class="loading">Loading...</td></tr>`;
+    try {
+        const rows = await fetchAPI('/actions');
+        tbody.innerHTML = '';
+        rows.forEach(a => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${a.ActionId}</td>
+                <td>${a.ActionType}</td>
+                <td>${formatDate(a.StartDate)}</td>
+                <td>${formatDate(a.EndDate)}</td>
+                <td>${a.ResponsibleOrg}</td>
+                <td><strong>${a.Effectiveness}%</strong></td>
+                <td>${getStatusBadge(a.StartDate, a.EndDate)}</td>
+                <td>
+                    <button class="btn btn-primary" onclick='editAction(${a.ActionId})'>Edit</button>
+                    <button class="btn btn-danger" onclick='deleteAction(${a.ActionId})'>Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="loading">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function editAction(id) {
+    try {
+        const a = await fetchAPI(`/actions/${id}`);
+        document.getElementById('modalTitle').textContent = 'Edit Conservation Action';
+        document.getElementById('actionId').value = a.ActionId;
+        document.getElementById('actionId').disabled = true;
+        document.getElementById('actionType').value = a.ActionType || '';
+        document.getElementById('startDate').value = a.StartDate ? a.StartDate.split('T')[0] : '';
+        document.getElementById('endDate').value = a.EndDate ? a.EndDate.split('T')[0] : '';
+        document.getElementById('responsibleOrg').value = a.ResponsibleOrg || '';
+        document.getElementById('effectiveness').value = a.Effectiveness || 0;
+        document.getElementById('actionModal').style.display = 'block';
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function saveAction(ev) {
+    ev.preventDefault();
+    const payload = {
+        actionId: parseInt(document.getElementById('actionId').value),
+        actionType: document.getElementById('actionType').value.trim(),
+        startDate: document.getElementById('startDate').value || null,
+        endDate: document.getElementById('endDate').value || null,
+        responsibleOrg: document.getElementById('responsibleOrg').value.trim(),
+        effectiveness: parseFloat(document.getElementById('effectiveness').value)
+    };
+    try {
+        if (document.getElementById('actionId').disabled) {
+            await sendAPI(`/actions/${payload.actionId}`, 'PUT', payload);
+        } else {
+            await sendAPI('/actions', 'POST', payload);
+        }
+        closeModal();
+        await loadActions();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function deleteAction(id) {
+    if (!confirm(`Delete conservation action ${id}?`)) return;
+    try {
+        await sendAPI(`/actions/${id}`, 'DELETE');
+        await loadActions();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+window.addEventListener('click', (e) => {
+    if (e.target.id === 'actionModal') closeModal();
+});
+
+document.addEventListener('DOMContentLoaded', loadActions);
+</file>
+
+<file path="public/js/location.js">
+const API_URL_LOC = 'http://localhost:3000/api';
+
+async function apiGet(p) {
+    const res = await fetch(`${API_URL_LOC}${p}`);
+    const j = await res.json();
+    if (!j.success) throw new Error(j.error || 'Request failed');
+    return j.data;
+}
+
+async function apiSend(p, method, body) {
+    const res = await fetch(`${API_URL_LOC}${p}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const j = await res.json();
+    if (!j.success) throw new Error(j.error || 'Request failed');
+    return j.data;
+}
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Location';
+    document.getElementById('locationId').disabled = false;
+    document.getElementById('locationForm').reset();
+    document.getElementById('locationModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('locationModal').style.display = 'none';
+}
+
+async function loadLocations() {
+    const tbody = document.querySelector('#locationsTable tbody');
+    tbody.innerHTML = `<tr><td colspan="6" class="loading">Loading...</td></tr>`;
+    try {
+        const rows = await apiGet('/locations');
+        tbody.innerHTML = '';
+        rows.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.LocationId}</td>
+                <td>${l.Country}</td>
+                <td>${l.Region}</td>
+                <td>${l.Latitude}, ${l.Longitude}</td>
+                <td>${l.EcosystemType}</td>
+                <td>
+                    <button class="btn btn-primary" onclick='editLocation(${l.LocationId})'>Edit</button>
+                    <button class="btn btn-danger" onclick='deleteLocation(${l.LocationId})'>Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="loading">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function editLocation(id) {
+    try {
+        const l = await apiGet(`/locations/${id}`);
+        document.getElementById('modalTitle').textContent = 'Edit Location';
+        document.getElementById('locationId').value = l.LocationId;
+        document.getElementById('locationId').disabled = true;
+        document.getElementById('country').value = l.Country || '';
+        document.getElementById('region').value = l.Region || '';
+        document.getElementById('latitude').value = l.Latitude;
+        document.getElementById('longitude').value = l.Longitude;
+        document.getElementById('ecosystemType').value = l.EcosystemType || '';
+        document.getElementById('locationModal').style.display = 'block';
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function saveLocation(ev) {
+    ev.preventDefault();
+    const payload = {
+        locationId: parseInt(document.getElementById('locationId').value),
+        country: document.getElementById('country').value.trim(),
+        region: document.getElementById('region').value.trim(),
+        latitude: parseFloat(document.getElementById('latitude').value),
+        longitude: parseFloat(document.getElementById('longitude').value),
+        ecosystemType: document.getElementById('ecosystemType').value.trim()
+    };
+    try {
+        if (document.getElementById('locationId').disabled) {
+            await apiSend(`/locations/${payload.locationId}`, 'PUT', payload);
+        } else {
+            await apiSend('/locations', 'POST', payload);
+        }
+        closeModal();
+        await loadLocations();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function deleteLocation(id) {
+    if (!confirm(`Delete location ${id}?`)) return;
+    try {
+        await apiSend(`/locations/${id}`, 'DELETE');
+        await loadLocations();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+window.addEventListener('click', (e) => {
+    if (e.target.id === 'locationModal') closeModal();
+});
+
+document.addEventListener('DOMContentLoaded', loadLocations);
+</file>
+
+<file path="public/js/main.js">
+// API Base URL
+const API_URL = 'http://localhost:3000/api';
+
+// Utility function to fetch data
+async function fetchData(endpoint) {
+    try {
+        const response = await fetch(`${API_URL}${endpoint}`);
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        } else {
+            throw new Error(data.error || 'Failed to fetch data');
+        }
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        showError(error.message);
+        return null;
+    }
+}
+
+// Show error message
+function showError(message) {
+    console.error('Error:', message);
+    alert(`Error: ${message}`);
+}
+
+// Format date
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-IN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// Load dashboard stats
+async function loadDashboardStats() {
+    try {
+        // Fetch all data
+        const [species, observations, locations, actions, dashboardStats] = await Promise.all([
+            fetchData('/species'),
+            fetchData('/observations'),
+            fetchData('/locations'),
+            fetchData('/actions'),
+            fetchData('/dashboard/stats')
+        ]);
+
+        // Update counts
+        document.getElementById('speciesCount').textContent = species ? species.length : 0;
+        document.getElementById('observationCount').textContent = observations ? observations.length : 0;
+        document.getElementById('locationCount').textContent = locations ? locations.length : 0;
+        document.getElementById('actionCount').textContent = actions ? actions.length : 0;
+
+        // Load status chart
+        if (dashboardStats && dashboardStats.statusCounts) {
+            loadStatusChart(dashboardStats.statusCounts);
+        }
+
+        // Load recent observations
+        if (dashboardStats && dashboardStats.recentObservations) {
+            loadRecentObservations(dashboardStats.recentObservations);
+        } else if (observations) {
+            loadRecentObservations(observations.slice(0, 5));
+        }
+
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+        showError('Failed to load dashboard data');
+    }
+}
+
+// Load status chart
+function loadStatusChart(statusCounts) {
+    const chartDiv = document.getElementById('statusChart');
+    chartDiv.innerHTML = '';
+
+    if (!statusCounts || statusCounts.length === 0) {
+        chartDiv.innerHTML = '<p class="loading">No status data available</p>';
+        return;
+    }
+
+    const statusLabels = {
+        'CR': 'Critically Endangered',
+        'EN': 'Endangered',
+        'VU': 'Vulnerable',
+        'NT': 'Near Threatened',
+        'LC': 'Least Concern',
+        'DD': 'Data Deficient',
+        'EX': 'Extinct',
+        'EW': 'Extinct in Wild',
+        'NE': 'Not Evaluated'
+    };
+
+    const maxCount = Math.max(...statusCounts.map(i => i.Count));
+
+    statusCounts.forEach(item => {
+        const barContainer = document.createElement('div');
+        barContainer.style.marginBottom = '15px';
+        
+        const percentage = (item.Count / maxCount) * 100;
+        
+        barContainer.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+                <span class="status-badge status-${item.ConservationStatus}" style="min-width: 50px; text-align: center;">
+                    ${item.ConservationStatus}
+                </span>
+                <span style="flex: 1; font-weight: 500;">${statusLabels[item.ConservationStatus] || item.ConservationStatus}</span>
+                <span style="font-weight: 700; color: #2c3e50;">${item.Count}</span>
+            </div>
+            <div style="background: #ecf0f1; height: 20px; border-radius: 10px; overflow: hidden;">
+                <div style="background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%); height: 100%; width: ${percentage}%; transition: width 0.5s; border-radius: 10px;"></div>
+            </div>
+        `;
+        chartDiv.appendChild(barContainer);
+    });
+}
+
+// Load recent observations
+function loadRecentObservations(observations) {
+    const tbody = document.querySelector('#recentObservationsTable tbody');
+    tbody.innerHTML = '';
+
+    if (!observations || observations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">No observations found</td></tr>';
+        return;
+    }
+
+    observations.forEach(obs => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${formatDate(obs.DateTime)}</td>
+            <td><strong>${obs.SpeciesName || 'Unknown'}</strong></td>
+            <td>${obs.Country}, ${obs.Region}</td>
+            <td>${obs.ObserverName || 'Unknown'}</td>
+            <td><span style="background: #3498db; color: white; padding: 4px 12px; border-radius: 12px; font-weight: 600;">${obs.Count}</span></td>
+            <td>${obs.Behavior || '-'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Initialize dashboard on page load
+if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('Loading dashboard...');
+        loadDashboardStats();
+    });
+}
+</file>
+
+<file path="public/js/observation.js">
+const API_BASE = 'http://localhost:3000/api';
+
+async function jget(path) {
+    const res = await fetch(`${API_BASE}${path}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Request failed');
+    return data.data;
+}
+
+async function jpost(path, body) {
+    const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Request failed');
+    return data.data;
+}
+
+function showAddModal() {
+    document.getElementById('observationForm').reset();
+    document.getElementById('observationModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('observationModal').style.display = 'none';
+}
+
+function fmt(dt) {
+    return new Date(dt).toLocaleString();
+}
+
+async function loadLookups() {
+    const [observers, species, locations] = await Promise.all([
+        jget('/observers'),
+        jget('/species'),
+        jget('/locations')
+    ]);
+
+    const obsSel = document.getElementById('observerId');
+    const spSel = document.getElementById('speciesId');
+    const locSel = document.getElementById('locationId');
+
+    obsSel.innerHTML = '<option value="">Select Observer</option>';
+    observers.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.ObserverId;
+        opt.textContent = `${o.ObserverId} - ${o.Name}`;
+        obsSel.appendChild(opt);
+    });
+
+    spSel.innerHTML = '<option value="">Select Species</option>';
+    species.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.SpeciesId;
+        opt.textContent = `${s.SpeciesId} - ${s.CommonName || s.ScientificName}`;
+        spSel.appendChild(opt);
+    });
+
+    locSel.innerHTML = '<option value="">Select Location</option>';
+    locations.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.LocationId;
+        opt.textContent = `${l.LocationId} - ${l.Country}, ${l.Region}`;
+        locSel.appendChild(opt);
+    });
+}
+
+async function loadObservations() {
+    const tbody = document.querySelector('#observationsTable tbody');
+    tbody.innerHTML = `<tr><td colspan="8" class="loading">Loading...</td></tr>`;
+    try {
+        const rows = await jget('/observations');
+        tbody.innerHTML = '';
+        rows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${r.ObserverId}</td>
+                <td>${r.ObservationNo}</td>
+                <td>${r.SpeciesName}</td>
+                <td>${r.Country}, ${r.Region}</td>
+                <td>${fmt(r.DateTime)}</td>
+                <td>${r.Count}</td>
+                <td>${r.Behavior || '-'}</td>
+                <td>${r.Evidence || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="loading">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function saveObservation(ev) {
+    ev.preventDefault();
+    const payload = {
+        observerId: parseInt(document.getElementById('observerId').value),
+        observationNo: parseInt(document.getElementById('observationNo').value),
+        speciesId: parseInt(document.getElementById('speciesId').value),
+        locationId: parseInt(document.getElementById('locationId').value),
+        dateTime: document.getElementById('dateTime').value ? new Date(document.getElementById('dateTime').value).toISOString().slice(0, 19).replace('T', ' ') : null,
+        count: parseInt(document.getElementById('count').value),
+        behavior: document.getElementById('behavior').value.trim() || null,
+        evidence: document.getElementById('evidence').value.trim() || null
+    };
+    try {
+        await jpost('/observations', payload);
+        closeModal();
+        await loadObservations();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+window.addEventListener('click', (e) => {
+    if (e.target.id === 'observationModal') closeModal();
+});
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadLookups();
+    await loadObservations();
+});
+</file>
+
+<file path="public/js/observers.js">
+// API Base URL
+const API_URL = 'http://localhost:3000/api';
+
+// Modal functions
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Observer';
+    document.getElementById('observerId').disabled = false;
+    document.getElementById('observerForm').reset();
+    document.getElementById('observerModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('observerModal').style.display = 'none';
+}
+
+// Get seniority label
+function getSeniorityLabel(level) {
+    if (!level || level < 2) return 'Novice';
+    if (level < 5) return 'Intermediate';
+    if (level < 10) return 'Advanced';
+    return 'Expert';
+}
+
+// Load observers
+async function loadObservers() {
+    const tbody = document.querySelector('#observersTable tbody');
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading observers...</td></tr>';
+    
+    try {
+        console.log('Fetching observers from:', `${API_URL}/observers`);
+        
+        const response = await fetch(`${API_URL}/observers`);
+        console.log('Response status:', response.status);
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load observers');
+        }
+        
+        const observers = data.data;
+        tbody.innerHTML = '';
+        
+        if (!observers || observers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No observers found</td></tr>';
+            return;
+        }
+        
+        observers.forEach(obs => {
+            const seniority = getSeniorityLabel(obs.ExperienceLevel);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${obs.ObserverId}</td>
+                <td><strong>${obs.Name || '-'}</strong></td>
+                <td>${obs.Contact || '-'}</td>
+                <td>${obs.Affiliation || '-'}</td>
+                <td>${obs.ExperienceLevel || 0}</td>
+                <td><span class="status-badge status-LC">${seniority}</span></td>
+                <td>
+                    <button class="btn btn-primary" onclick="editObserver(${obs.ObserverId})">Edit</button>
+                    <button class="btn btn-danger" onclick="deleteObserver(${obs.ObserverId})">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        console.log('Observers loaded successfully');
+    } catch (error) {
+        console.error('Error loading observers:', error);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:red; padding:2rem;">Error: ${error.message}</td></tr>`;
+    }
+}
+
+// Edit observer
+async function editObserver(id) {
+    try {
+        console.log('Editing observer:', id);
+        const response = await fetch(`${API_URL}/observers/${id}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load observer');
+        }
+        
+        const obs = data.data;
+        document.getElementById('modalTitle').textContent = 'Edit Observer';
+        document.getElementById('observerId').value = obs.ObserverId;
+        document.getElementById('observerId').disabled = true;
+        document.getElementById('name').value = obs.Name || '';
+        document.getElementById('contact').value = obs.Contact || '';
+        document.getElementById('affiliation').value = obs.Affiliation || '';
+        document.getElementById('experienceLevel').value = obs.ExperienceLevel || 0;
+        
+        document.getElementById('observerModal').style.display = 'block';
+    } catch (error) {
+        console.error('Error editing observer:', error);
+        alert('Error: ' + error.message);
+    }
+}
+
+// Save observer
+async function saveObserver(event) {
+    event.preventDefault();
+    
+    const observerId = parseInt(document.getElementById('observerId').value);
+    const payload = {
+        observerId: observerId,
+        name: document.getElementById('name').value.trim(),
+        contact: document.getElementById('contact').value.trim(),
+        affiliation: document.getElementById('affiliation').value.trim(),
+        experienceLevel: parseInt(document.getElementById('experienceLevel').value)
+    };
+    
+    try {
+        const isEdit = document.getElementById('observerId').disabled;
+        const url = isEdit ? `${API_URL}/observers/${observerId}` : `${API_URL}/observers`;
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        console.log('Saving observer:', method, url, payload);
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to save observer');
+        }
+        
+        alert(isEdit ? 'Observer updated!' : 'Observer created!');
+        closeModal();
+        await loadObservers();
+    } catch (error) {
+        console.error('Error saving observer:', error);
+        alert('Error: ' + error.message);
+    }
+}
+
+// Delete observer
+async function deleteObserver(id) {
+    if (!confirm(`Delete observer ${id}? This will also delete their observations.`)) {
+        return;
+    }
+    
+    try {
+        console.log('Deleting observer:', id);
+        const response = await fetch(`${API_URL}/observers/${id}`, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to delete observer');
+        }
+        
+        alert('Observer deleted successfully!');
+        await loadObservers();
+    } catch (error) {
+        console.error('Error deleting observer:', error);
+        alert('Error: ' + error.message);
+    }
+}
+
+// Close modal on outside click
+window.addEventListener('click', (event) => {
+    if (event.target.id === 'observerModal') {
+        closeModal();
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Observers page initialized');
+    loadObservers();
+});
+</file>
+
+<file path="public/js/species.js">
+const API = 'http://localhost:3000/api';
+
+async function fetchJSON(url, options = {}) {
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Request failed');
+    return data.data;
+}
+
+function statusBadge(status) {
+    return `<span class="status-badge status-${status}">${status}</span>`;
+}
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add New Species';
+    document.getElementById('speciesId').disabled = false;
+    document.getElementById('speciesForm').reset();
+    document.getElementById('speciesModal').style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('speciesModal').style.display = 'none';
+}
+
+async function loadSpecies() {
+    const tbody = document.querySelector('#speciesTable tbody');
+    tbody.innerHTML = `<tr><td colspan="7" class="loading">Loading species...</td></tr>`;
+    try {
+        const rows = await fetchJSON(`${API}/species`);
+        tbody.innerHTML = '';
+        rows.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${s.SpeciesId}</td>
+                <td>${s.CommonName || '-'}</td>
+                <td>${s.ScientificName || '-'}</td>
+                <td>${statusBadge(s.ConservationStatus || 'NE')}</td>
+                <td>${s.HabitatType || '-'}</td>
+                <td>${s.Diets || '-'}</td>
+                <td>
+                    <button class="btn btn-primary" onclick='editSpecies(${JSON.stringify(s.SpeciesId)})'>Edit</button>
+                    <button class="btn btn-danger" onclick='deleteSpecies(${JSON.stringify(s.SpeciesId)})'>Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="loading">Error: ${e.message}</td></tr>`;
+    }
+}
+
+async function editSpecies(id) {
+    try {
+        const s = await fetchJSON(`${API}/species/${id}`);
+        document.getElementById('modalTitle').textContent = 'Edit Species';
+        document.getElementById('speciesId').value = s.SpeciesId;
+        document.getElementById('speciesId').disabled = true;
+        document.getElementById('commonName').value = s.CommonName || '';
+        document.getElementById('scientificName').value = s.ScientificName || '';
+        document.getElementById('conservationStatus').value = s.ConservationStatus || '';
+        document.getElementById('habitatType').value = s.HabitatType || '';
+        document.getElementById('speciesModal').style.display = 'block';
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function saveSpecies(ev) {
+    ev.preventDefault();
+    const payload = {
+        speciesId: parseInt(document.getElementById('speciesId').value),
+        commonName: document.getElementById('commonName').value.trim(),
+        scientificName: document.getElementById('scientificName').value.trim(),
+        conservationStatus: document.getElementById('conservationStatus').value,
+        habitatType: document.getElementById('habitatType').value.trim()
+    };
+    try {
+        if (document.getElementById('speciesId').disabled) {
+            await fetchJSON(`${API}/species/${payload.speciesId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+        } else {
+            await fetchJSON(`${API}/species`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+        }
+        closeModal();
+        await loadSpecies();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+async function deleteSpecies(id) {
+    if (!confirm(`Delete species ${id}? This will cascade related rows.`)) return;
+    try {
+        await fetchJSON(`${API}/species/${id}`, { method: 'DELETE' });
+        await loadSpecies();
+    } catch (e) {
+        alert(e.message);
+    }
+}
+
+window.addEventListener('click', (e) => {
+    if (e.target.id === 'speciesModal') closeModal();
+});
+
+document.addEventListener('DOMContentLoaded', loadSpecies);
+</file>
+
+<file path="routes/actionRoutes.js">
+const express = require('express');
+const router = express.Router();
+const actionController = require('../controllers/actionController');
+
+// GET all actions
+router.get('/', actionController.getAllActions);
+
+// GET action by ID
+router.get('/:id', actionController.getActionById);
+
+// GET check if action is active
+router.get('/check/active', actionController.checkActionActive);
+
+// POST create new action
+router.post('/', actionController.createAction);
+
+// POST apply action to location (stored procedure)
+router.post('/apply', actionController.applyActionToLocation);
+
+// PUT update action
+router.put('/:id', actionController.updateAction);
+
+// DELETE action
+router.delete('/:id', actionController.deleteAction);
+
+module.exports = router;
+</file>
+
+<file path="routes/dashboardRoutes.js">
+const express = require('express');
+const router = express.Router();
+const dashboardController = require('../controllers/dashboardController');
+
+router.get('/stats', dashboardController.getDashboardStats);
+
+module.exports = router;
+</file>
+
+<file path="routes/locationRoutes.js">
+const express = require('express');
+const router = express.Router();
+const locationController = require('../controllers/locationController');
+
+// GET all locations
+router.get('/', locationController.getAllLocations);
+
+// GET location by ID
+router.get('/:id', locationController.getLocationById);
+
+// POST create new location
+router.post('/', locationController.createLocation);
+
+// PUT update location
+router.put('/:id', locationController.updateLocation);
+
+// DELETE location
+router.delete('/:id', locationController.deleteLocation);
+
+module.exports = router;
+</file>
+
+<file path="routes/observationRoutes.js">
+const express = require('express');
+const router = express.Router();
+const observationController = require('../controllers/observationController');
+
+router.get('/', observationController.getAllObservations);
+router.get('/recent', observationController.getRecentObservations);
+router.post('/', observationController.logObservation);
+router.get('/count', observationController.getObservationCount);
+
+module.exports = router;
+</file>
+
+<file path="routes/observerRoutes.js">
+const express = require('express');
+const router = express.Router();
+const observerController = require('../controllers/observerController');
+
+// GET all observers
+router.get('/', observerController.getAllObservers);
+
+// GET observer by ID
+router.get('/:id', observerController.getObserverById);
+
+// GET seniority level (custom function)
+router.get('/seniority/:level', observerController.getObserverSeniority);
+
+// GET observation count for observer
+router.get('/:id/observations/count', observerController.getObservationCount);
+
+// POST create new observer
+router.post('/', observerController.createObserver);
+
+// PUT update observer
+router.put('/:id', observerController.updateObserver);
+
+// DELETE observer
+router.delete('/:id', observerController.deleteObserver);
+
+module.exports = router;
+</file>
+
+<file path="routes/speciesRoutes.js">
+const express = require('express');
+const router = express.Router();
+const speciesController = require('../controllers/speciesController');
+
+// GET all species
+router.get('/', speciesController.getAllSpecies);
+
+// GET species by ID
+router.get('/:id', speciesController.getSpeciesById);
+
+// GET species full name (custom function)
+router.get('/:id/fullname', speciesController.getSpeciesFullName);
+
+// GET species threats
+router.get('/:id/threats', speciesController.getSpeciesThreats);
+
+// GET species actions
+router.get('/:id/actions', speciesController.getSpeciesActions);
+
+// POST create new species
+router.post('/', speciesController.createSpecies);
+
+// PUT update species
+router.put('/:id', speciesController.updateSpecies);
+
+// DELETE species
+router.delete('/:id', speciesController.deleteSpecies);
+
+// GET count by status
+router.get('/stats/by-status', speciesController.getCountByStatus);
+
+module.exports = router;
+</file>
+
+<file path="server.js">
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files (HTML, CSS, JS)
+app.use(express.static('public'));
+app.use(express.static('views'));
+
+// Import routes
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const speciesRoutes = require('./routes/speciesRoutes');
+const observationRoutes = require('./routes/observationRoutes');
+const locationRoutes = require('./routes/locationRoutes');
+const observerRoutes = require('./routes/observerRoutes');
+const actionRoutes = require('./routes/actionRoutes');
+
+// Use routes
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/species', speciesRoutes);
+app.use('/api/observations', observationRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/observers', observerRoutes);
+app.use('/api/actions', actionRoutes);
+
+// Root route - serve dashboard
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'views', 'index.html'));
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+</file>
+
+<file path="views/action.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Conservation Actions</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/species.html">Species</a></li>
+                <li><a href="/observation.html">Observations</a></li>
+                <li><a href="/location.html">Locations</a></li>
+                <li><a href="/observers.html">Observers</a></li>
+                <li><a href="/action.html" class="active">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Conservation Actions</h2>
+                <button class="btn btn-success" onclick="showAddModal()">+ Add New Action</button>
+            </div>
+
+            <!-- Actions Table -->
+            <div class="card">
+                <div class="table-container">
+                    <table id="actionsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Action Type</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Responsible Org</th>
+                                <th>Effectiveness %</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="8" class="loading">Loading actions...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="actionModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Add New Conservation Action</h3>
+            <form id="actionForm" onsubmit="saveAction(event)">
+                <div class="form-group">
+                    <label>Action ID:</label>
+                    <input type="number" id="actionId" required>
+                </div>
+                <div class="form-group">
+                    <label>Action Type:</label>
+                    <input type="text" id="actionType" required placeholder="e.g., Anti-Poaching Patrols">
+                </div>
+                <div class="form-group">
+                    <label>Start Date:</label>
+                    <input type="date" id="startDate" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date (leave empty if ongoing):</label>
+                    <input type="date" id="endDate">
+                </div>
+                <div class="form-group">
+                    <label>Responsible Organization:</label>
+                    <input type="text" id="responsibleOrg" required>
+                </div>
+                <div class="form-group">
+                    <label>Effectiveness (%):</label>
+                    <input type="number" id="effectiveness" min="0" max="100" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Save Action</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/action.js"></script>
+</body>
+</html>
+</file>
+
+<file path="views/index.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="active">Dashboard</a></li>
+                <li><a href="/species.html">Species</a></li>
+                <li><a href="/observation.html">Observations</a></li>
+                <li><a href="/location.html">Locations</a></li>
+                <li><a href="/observers.html">Observers</a></li>
+                <li><a href="/action.html">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <h2>Dashboard Overview</h2>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">🐾</div>
+                    <div class="stat-info">
+                        <h3 id="speciesCount">-</h3>
+                        <p>Total Species</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👁️</div>
+                    <div class="stat-info">
+                        <h3 id="observationCount">-</h3>
+                        <p>Total Observations</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">📍</div>
+                    <div class="stat-info">
+                        <h3 id="locationCount">-</h3>
+                        <p>Locations Monitored</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎯</div>
+                    <div class="stat-info">
+                        <h3 id="actionCount">-</h3>
+                        <p>Conservation Actions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conservation Status Chart -->
+            <div class="card">
+                <h3>Species by Conservation Status</h3>
+                <div id="statusChart" class="chart-container">
+                    <p class="loading">Loading data...</p>
+                </div>
+            </div>
+
+            <!-- Recent Observations -->
+            <div class="card">
+                <h3>Recent Observations</h3>
+                <div class="table-container">
+                    <table id="recentObservationsTable">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Species</th>
+                                <th>Location</th>
+                                <th>Observer</th>
+                                <th>Count</th>
+                                <th>Behavior</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="loading">Loading observations...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>
+</file>
+
+<file path="views/location.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Locations</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/species.html">Species</a></li>
+                <li><a href="/observation.html">Observations</a></li>
+                <li><a href="/location.html" class="active">Locations</a></li>
+                <li><a href="/observers.html">Observers</a></li>
+                <li><a href="/action.html">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Monitoring Locations</h2>
+                <button class="btn btn-success" onclick="showAddModal()">+ Add New Location</button>
+            </div>
+
+            <!-- Locations Table -->
+            <div class="card">
+                <div class="table-container">
+                    <table id="locationsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Country</th>
+                                <th>Region</th>
+                                <th>Coordinates</th>
+                                <th>Ecosystem Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6" class="loading">Loading locations...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="locationModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Add New Location</h3>
+            <form id="locationForm" onsubmit="saveLocation(event)">
+                <div class="form-group">
+                    <label>Location ID:</label>
+                    <input type="number" id="locationId" required>
+                </div>
+                <div class="form-group">
+                    <label>Country:</label>
+                    <input type="text" id="country" required>
+                </div>
+                <div class="form-group">
+                    <label>Region:</label>
+                    <input type="text" id="region" required>
+                </div>
+                <div class="form-group">
+                    <label>Latitude:</label>
+                    <input type="number" step="0.000001" id="latitude" required placeholder="e.g., 22.3345">
+                </div>
+                <div class="form-group">
+                    <label>Longitude:</label>
+                    <input type="number" step="0.000001" id="longitude" required placeholder="e.g., 80.6115">
+                </div>
+                <div class="form-group">
+                    <label>Ecosystem Type:</label>
+                    <input type="text" id="ecosystemType" required placeholder="e.g., Forest, Marine">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Save Location</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/location.js"></script>
+</body>
+</html>
+</file>
+
+<file path="views/observation.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Observations</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/species.html">Species</a></li>
+                <li><a href="/observation.html" class="active">Observations</a></li>
+                <li><a href="/location.html">Locations</a></li>
+                <li><a href="/observers.html">Observers</a></li>
+                <li><a href="/action.html">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Observations Log</h2>
+                <button class="btn btn-success" onclick="showAddModal()">+ Log New Observation</button>
+            </div>
+
+            <!-- Observations Table -->
+            <div class="card">
+                <div class="table-container">
+                    <table id="observationsTable">
+                        <thead>
+                            <tr>
+                                <th>Observer ID</th>
+                                <th>Obs No.</th>
+                                <th>Species</th>
+                                <th>Location</th>
+                                <th>Date & Time</th>
+                                <th>Count</th>
+                                <th>Behavior</th>
+                                <th>Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="8" class="loading">Loading observations...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Observation Modal -->
+    <div id="observationModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Log New Observation</h3>
+            <form id="observationForm" onsubmit="saveObservation(event)">
+                <div class="form-group">
+                    <label>Observer:</label>
+                    <select id="observerId" required>
+                        <option value="">Select Observer</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Observation Number:</label>
+                    <input type="number" id="observationNo" required>
+                </div>
+                <div class="form-group">
+                    <label>Species:</label>
+                    <select id="speciesId" required>
+                        <option value="">Select Species</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Location:</label>
+                    <select id="locationId" required>
+                        <option value="">Select Location</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date & Time:</label>
+                    <input type="datetime-local" id="dateTime" required>
+                </div>
+                <div class="form-group">
+                    <label>Count:</label>
+                    <input type="number" id="count" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Behavior:</label>
+                    <input type="text" id="behavior" placeholder="e.g., Hunting, Grazing">
+                </div>
+                <div class="form-group">
+                    <label>Evidence (file name/description):</label>
+                    <input type="text" id="evidence" placeholder="e.g., Photo1.jpg">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Log Observation</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/observation.js"></script>
+</body>
+</html>
+</file>
+
+<file path="views/observers.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Observers</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/species.html">Species</a></li>
+                <li><a href="/observation.html">Observations</a></li>
+                <li><a href="/location.html">Locations</a></li>
+                <li><a href="/observers.html" class="active">Observers</a></li>
+                <li><a href="/action.html">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Field Observers</h2>
+                <button class="btn btn-success" onclick="showAddModal()">+ Add New Observer</button>
+            </div>
+
+            <!-- Observers Table -->
+            <div class="card">
+                <div class="table-container">
+                    <table id="observersTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Contact</th>
+                                <th>Affiliation</th>
+                                <th>Experience Level</th>
+                                <th>Seniority</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" class="loading">Loading observers...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="observerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Add New Observer</h3>
+            <form id="observerForm" onsubmit="saveObserver(event)">
+                <div class="form-group">
+                    <label>Observer ID:</label>
+                    <input type="number" id="observerId" required>
+                </div>
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label>Contact:</label>
+                    <input type="text" id="contact" required placeholder="email or phone">
+                </div>
+                <div class="form-group">
+                    <label>Affiliation:</label>
+                    <input type="text" id="affiliation" required placeholder="Organization">
+                </div>
+                <div class="form-group">
+                    <label>Experience Level (years):</label>
+                    <input type="number" id="experienceLevel" min="0" required>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Save Observer</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/observers.js"></script>
+</body>
+</html>
+</file>
+
+<file path="views/species.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiodiversityDB - Species</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🌿 BiodiversityDB</h1>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/species.html" class="active">Species</a></li>
+                <li><a href="/observation.html">Observations</a></li>
+                <li><a href="/location.html">Locations</a></li>
+                <li><a href="/observers.html">Observers</a></li>
+                <li><a href="/action.html">Actions</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Species Management</h2>
+                <button class="btn btn-success" onclick="showAddModal()">+ Add New Species</button>
+            </div>
+
+            <!-- Species Table -->
+            <div class="card">
+                <div class="table-container">
+                    <table id="speciesTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Common Name</th>
+                                <th>Scientific Name</th>
+                                <th>Status</th>
+                                <th>Habitat</th>
+                                <th>Diet</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7" class="loading">Loading species...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="speciesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Add New Species</h3>
+            <form id="speciesForm" onsubmit="saveSpecies(event)">
+                <div class="form-group">
+                    <label>Species ID:</label>
+                    <input type="number" id="speciesId" required>
+                </div>
+                <div class="form-group">
+                    <label>Common Name:</label>
+                    <input type="text" id="commonName" required>
+                </div>
+                <div class="form-group">
+                    <label>Scientific Name:</label>
+                    <input type="text" id="scientificName" required>
+                </div>
+                <div class="form-group">
+                    <label>Conservation Status:</label>
+                    <select id="conservationStatus" required>
+                        <option value="">Select Status</option>
+                        <option value="EX">EX - Extinct</option>
+                        <option value="EW">EW - Extinct in Wild</option>
+                        <option value="CR">CR - Critically Endangered</option>
+                        <option value="EN">EN - Endangered</option>
+                        <option value="VU">VU - Vulnerable</option>
+                        <option value="NT">NT - Near Threatened</option>
+                        <option value="LC">LC - Least Concern</option>
+                        <option value="DD">DD - Data Deficient</option>
+                        <option value="NE">NE - Not Evaluated</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Habitat Type:</label>
+                    <input type="text" id="habitatType" required placeholder="e.g., Forest, Marine, Wetlands">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Save Species</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/species.js"></script>
+</body>
+</html>
+</file>
+
+</files>
